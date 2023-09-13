@@ -24,10 +24,10 @@ from .serializers import (
 )
 from django.contrib.auth import get_user_model
 from .models import Profile, Post, Category, Tag, Comment
-from django.db.models import F, Q, Count
+from django.db.models import F, Q, Count, DateTimeField, ExpressionWrapper
 from django.utils import timezone
 import json
-from datetime import date, datetime
+from datetime import date, datetime, timedelta
 import random
 
 User = get_user_model()
@@ -67,7 +67,7 @@ class RegisterView(TokenObtainPairView):
     def post(self, request, *args, **kwargs):
         try:
             data = request.data
-            username = data.get("username")
+            username = data.get("email")
             password = data.get("password")
             email = data.get("email")
             first_name = data.get("first_name")
@@ -108,7 +108,7 @@ class RegisterView(TokenObtainPairView):
                     return Response(data, status=status.HTTP_201_CREATED)
                 except Exception as e:
                     return Response(
-                        {"error": "error register"}, status=status.HTTP_400_BAD_REQUEST
+                        {"error": str(e)}, status=status.HTTP_400_BAD_REQUEST
                     )
             else:
                 return Response(
@@ -116,7 +116,7 @@ class RegisterView(TokenObtainPairView):
                 )
         except Exception as e:
             return Response(
-                {"error": "error register2"}, status=status.HTTP_400_BAD_REQUEST
+                {"error": str(e)}, status=status.HTTP_400_BAD_REQUEST
             )
 
 
@@ -137,6 +137,15 @@ class LogoutView(APIView):
 class TestView(APIView):
     permission_classes = (IsAdminOrReadOnly,)
     authentication_classes = (JWTAuthentication,)
+
+    # def get(self, request, *args, **kwargs):
+    #     try:
+    #         Post.objects.all().update( created_at=ExpressionWrapper(F('created_at') - timedelta(hours=7), output_field=DateTimeField()))
+    #         Comment.objects.all().update( created_at=ExpressionWrapper(F('created_at') - timedelta(hours=7), output_field=DateTimeField()))
+    #         Tag.objects.all().update( created_at=ExpressionWrapper(F('created_at') - timedelta(hours=7), output_field=DateTimeField()))
+    #         return Response({"message": "Hello World! This is a test view."}, status=status.HTTP_200_OK)
+    #     except Exception as e:
+    #         return Response({"error": str(e)}, status=status.HTTP_400_BAD_REQUEST)
 
     def post(self, request, *args, **kwargs):
         try:
@@ -235,12 +244,17 @@ class PostDetailView(APIView):
                 post.category.save()
                 post.save()
                 tags = json.loads(data.get("tags"))
+                tags_old = post.tags.all()
+                for tag in tags_old:
+                    tag.tag_count = F("tag_count") - 1
+                    tag.save()
                 post.tags.clear()
                 for tag in tags:
                     tag, created = Tag.objects.get_or_create(tag_name=tag)
                     tag.tag_count = F("tag_count") + 1
                     tag.save()
                     post.tags.add(tag)
+
                 post.save()
                 serializer = PostSerializer(post)
                 return Response(serializer.data, status=status.HTTP_200_OK)
@@ -427,6 +441,7 @@ class PostByCategoryView(APIView):
                 if not main_category:
                     posts = Post.objects.order_by("-created_at")[index : index + count]
                 elif not sub_category:
+                    print(main_category + " " + str(index) + " " + str(count))
                     posts = Post.objects.order_by("-created_at").filter(
                         category__main_category__iexact=main_category
                     )[index : index + count]
@@ -506,17 +521,23 @@ class SearchView(APIView):
 
             if not filter or filter == "1":
                 if not type or type == "1":
-                    posts = Post.objects.order_by("-created_at").filter(
-                        Q(title__icontains=q) | Q(tags__tag_name__icontains=q)
-                    )[index : index + count]
-                if type == "2":
-                    posts = Post.objects.order_by("created_at").filter(
-                        Q(title__icontains=q) | Q(tags__tag_name__icontains=q)
-                    )[index : index + count]
-                if type == "3":
-                    posts = Post.objects.order_by("-view_count").filter(
-                        Q(title__icontains=q) | Q(tags__tag_name__icontains=q)
-                    )[index : index + count]
+                    posts = (
+                        Post.objects.order_by("-created_at")
+                        .filter(Q(tags__tag_name__icontains=q) | Q(title__icontains=q))
+                        .distinct()[index : index + count]
+                    )
+                elif type == "2":
+                    posts = (
+                        Post.objects.order_by("created_at")
+                        .filter(Q(title__icontains=q) | Q(tags__tag_name__icontains=q))
+                        .distinct()[index : index + count]
+                    )
+                elif type == "3":
+                    posts = (
+                        Post.objects.order_by("-view_count")
+                        .filter(Q(title__icontains=q) | Q(tags__tag_name__icontains=q))
+                        .distinct()[index : index + count]
+                    )
 
             elif filter == "2":
                 keys_list = q.split(" ")
@@ -529,11 +550,11 @@ class SearchView(APIView):
                     posts = Post.objects.order_by("-created_at").filter(query)[
                         index : index + count
                     ]
-                if type == "2":
+                elif type == "2":
                     posts = Post.objects.order_by("created_at").filter(query)[
                         index : index + count
                     ]
-                if type == "3":
+                elif type == "3":
                     posts = Post.objects.order_by("-view_count").filter(query)[
                         index : index + count
                     ]

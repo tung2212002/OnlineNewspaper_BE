@@ -31,8 +31,6 @@ from datetime import date, datetime, timedelta
 import random
 
 User = get_user_model()
-# Create your views here.
-
 
 class MyTokenObtainPairView(TokenObtainPairView):
     serializer_class = MyTokenObtainPairSerializer
@@ -137,15 +135,6 @@ class LogoutView(APIView):
 class TestView(APIView):
     permission_classes = (IsAdminOrReadOnly,)
     authentication_classes = (JWTAuthentication,)
-
-    # def get(self, request, *args, **kwargs):
-    #     try:
-    #         Post.objects.all().update( created_at=ExpressionWrapper(F('created_at') - timedelta(hours=7), output_field=DateTimeField()))
-    #         Comment.objects.all().update( created_at=ExpressionWrapper(F('created_at') - timedelta(hours=7), output_field=DateTimeField()))
-    #         Tag.objects.all().update( created_at=ExpressionWrapper(F('created_at') - timedelta(hours=7), output_field=DateTimeField()))
-    #         return Response({"message": "Hello World! This is a test view."}, status=status.HTTP_200_OK)
-    #     except Exception as e:
-    #         return Response({"error": str(e)}, status=status.HTTP_400_BAD_REQUEST)
 
     def post(self, request, *args, **kwargs):
         try:
@@ -414,7 +403,6 @@ class PostByCategoryView(APIView):
 
             elif filter == "month":
                 today = timezone.now().date()
-                print(today.day, today.month, today.year)
                 if not main_category:
                     posts = Post.objects.filter(
                         created_at__year=today.year,
@@ -441,7 +429,6 @@ class PostByCategoryView(APIView):
                 if not main_category:
                     posts = Post.objects.order_by("-created_at")[index : index + count]
                 elif not sub_category:
-                    print(main_category + " " + str(index) + " " + str(count))
                     posts = Post.objects.order_by("-created_at").filter(
                         category__main_category__iexact=main_category
                     )[index : index + count]
@@ -653,10 +640,8 @@ class LikeCommentView(APIView):
             comment = Comment.objects.get(id=comment_id)
             if user in comment.user_like.all():
                 comment.user_like.remove(user)
-                print("unlike")
             else:
                 comment.user_like.add(user)
-                print("like")
             comment.save()
             serializer = CommentSerializer(comment, context={"user": request.user})
             return Response(serializer.data, status=status.HTTP_200_OK)
